@@ -1,6 +1,9 @@
 package sd2526.trab.impl.java.servers;
 
 import java.io.IOException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
 import java.util.logging.Logger;
 
 import sd2526.trab.impl.utils.IP;
@@ -23,7 +26,7 @@ public abstract class AbstractServer {
 		return "%s@%s".formatted(service, IP.domain());
 	}
 	
-	abstract protected void start() throws IOException;
+	abstract protected void start() throws IOException, NoSuchAlgorithmException, KeyStoreException, UnrecoverableKeyException;
 	
 	static {
 		System.setProperty("java.net.preferIPv4Stack", "true");

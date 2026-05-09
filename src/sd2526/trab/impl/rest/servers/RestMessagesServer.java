@@ -1,5 +1,6 @@
 package sd2526.trab.impl.rest.servers;
 
+import java.security.NoSuchAlgorithmException;
 import java.util.logging.Logger;
 
 import org.glassfish.jersey.server.ResourceConfig;
@@ -20,7 +21,7 @@ public class RestMessagesServer extends AbstractRestServer {
 		config.register(RestMessagesResource.class);
 	}
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws NoSuchAlgorithmException {
 		new RestMessagesServer().start();
 	}
 }
