@@ -51,16 +51,15 @@ public abstract class AbstractGrpcServer extends AbstractServer {
         SslContext context = GrpcSslContexts.configure(
                 SslContextBuilder.forServer(keyManagerFactory)
         ).build();
-        GrpcUsersController stub = new GrpcUsersController();
 
-         server = NettyServerBuilder.forPort(port)
-                .addService(stub).sslContext(context).build();
+        var builder = NettyServerBuilder.forPort(port)
+                .sslContext(context);
 
-        String serverURI = String.format(SERVER_BASE_URI, IP.hostname(), port, GRPC_CTX);
-		var builder = ServerBuilder.forPort(port);
-		for( var s : controllers( super.serverURI ) )
-			builder.addService( s );
+        for (var controller : controllers(super.serverURI)) {
+            builder.addService(controller);
+        }
 
+        server = builder.build();
 	}
 
 	protected abstract List<GrpcController> controllers( String uri );
