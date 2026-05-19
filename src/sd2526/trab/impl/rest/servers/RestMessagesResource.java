@@ -16,7 +16,7 @@ public class RestMessagesResource extends RestResource implements RestMessages, 
 	
 	static boolean isGateway = false;
 	
-	Messages impl;	
+	protected Messages impl;
 
 	synchronized Messages impl() {
 		if( impl == null )

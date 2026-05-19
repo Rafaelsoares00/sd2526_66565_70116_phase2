@@ -100,7 +100,6 @@ public class Zoho {
         String accountID = getAccount().accountId();
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
         OAuthRequest request = new OAuthRequest(Verb.GET, MAIL_API_BASE + ACCOUNTS + "/" + accountID + MESSAGES + "/view");
-        request.addHeader("Content-Type", "application/json; charset=utf-8");
         request.addHeader("Accept", "application/json");
         service.signRequest(accessToken, request);
         try (Response response = service.execute(request)) {
@@ -118,23 +117,18 @@ public class Zoho {
         String accountID = getAccount().accountId();
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
         OAuthRequest request = new OAuthRequest(Verb.GET, MAIL_API_BASE + ACCOUNTS + "/" + accountID + MESSAGES + "/view");
-        request.addHeader("Content-Type", "application/json; charset=utf-8");
         request.addHeader("Accept", "application/json");
         service.signRequest(accessToken, request);
-        System.out.println("passed sign request");
         try (Response response = service.execute(request)) {
             if (!response.isSuccessful())
                 throw new RuntimeException(response.getCode() + ": " + response.getBody());
 
             var body = response.getBody();
             var data = JSON.decode(body, ZohoMessageReply.class).data();
-            System.out.println("passed var data");
             if (data == null || data.isEmpty()) return null;
             for(ZohoMessage message : data){
-                if (message != null && message.subject().contains(messageID)) {
-                    System.out.println(message.subject());
+                if (message != null && message.subject().contains(messageID))
                     return message;
-                }
             }
             return null;
         }
@@ -173,18 +167,17 @@ public class Zoho {
     }
 
     //If the Tester passes the value false, the saved state should be used by the server.
-    public List<ZohoMessage> getAllStoredMessages() throws Exception {
-        var msgs = getAllMessages();
-        if (msgs != null)
-            return msgs;
-        else
-            return new ArrayList<>();
-    }
+//    public List<ZohoMessage> getAllStoredMessages() throws Exception {
+//        var msgs = getAllMessages();
+//        if (msgs != null)
+//            return msgs;
+//        else
+//            return new ArrayList<>();
+//    } i actually dont think this is needed
 
     private String getMessageContent(String accountId, String folderId, String messageId) throws Exception {
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
         OAuthRequest request = new OAuthRequest(Verb.GET, MAIL_API_BASE + ACCOUNTS + "/" + accountId + FOLDERS + folderId + MESSAGES + "/" + messageId + "/content");
-        request.addHeader("Content-Type", "application/json; charset=utf-8");
         request.addHeader("Accept", "application/json");
         service.signRequest(accessToken, request);
 

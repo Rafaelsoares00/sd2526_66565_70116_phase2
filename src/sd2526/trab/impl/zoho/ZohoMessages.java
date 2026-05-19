@@ -18,7 +18,11 @@ public class ZohoMessages implements Messages {
 
     @Override
     public Result<String> postMessage(String pwd, Message msg) {
-        //error handling
+        if (pwd == null || msg == null)
+            return error(BAD_REQUEST);
+        var user = getUser(msg.getSender(), pwd);
+        if (!user.isOK())
+            return error(FORBIDDEN);
 
         try {
 
@@ -31,7 +35,11 @@ public class ZohoMessages implements Messages {
 
     @Override
     public Result<Message> getInboxMessage(String name, String mid, String pwd) {
-        //error handling
+        if (badParams(name, mid, pwd))
+            return error(BAD_REQUEST);
+        var userResult = getUser(name, pwd);
+        if (!userResult.isOK())
+            return error(FORBIDDEN);
 
         try {
             ZohoMessage zohoMsg = zoho.getMessage(mid);
@@ -52,7 +60,11 @@ public class ZohoMessages implements Messages {
 
     @Override
     public Result<List<String>> getAllInboxMessages(String name, String pwd) {
-        //error handling
+        if (badParams(name, pwd))
+            return error(BAD_REQUEST);
+        var userResult = getUser(name, pwd);
+        if (!userResult.isOK())
+            return error(FORBIDDEN);
 
         try {
             var msgs = zoho.getAllMessages();
@@ -69,7 +81,11 @@ public class ZohoMessages implements Messages {
 
     @Override
     public Result<Void> removeInboxMessage(String name, String mid, String pwd) {
-        //error handling
+        if (badParams(name, mid, pwd))
+            return error(BAD_REQUEST);
+        var userResult = getUser(name, pwd);
+        if (!userResult.isOK())
+            return error(FORBIDDEN);
 
         try {
             ZohoMessage zohoMsg = zoho.getMessage(mid);
@@ -87,7 +103,11 @@ public class ZohoMessages implements Messages {
 
     @Override
     public Result<Void> deleteMessage(String name, String mid, String pwd) {
-        //error handling
+        if (badParams(name, mid, pwd))
+            return error(BAD_REQUEST);
+        var userResult = getUser(name, pwd);
+        if (!userResult.isOK())
+            return error(FORBIDDEN);
 
         try {
             ZohoMessage zohoMsg = zoho.getMessage(mid);
@@ -106,7 +126,11 @@ public class ZohoMessages implements Messages {
 
     @Override
     public Result<List<String>> searchInbox(String name, String pwd, String query) {
-        //error handling
+        if (badParams(name, pwd, query))
+            return error(BAD_REQUEST);
+        var userResult = getUser(name, pwd);
+        if (!userResult.isOK())
+            return error(FORBIDDEN);
 
         try {
             //filter messages by query
@@ -125,5 +149,12 @@ public class ZohoMessages implements Messages {
             x.printStackTrace();
             return error(INTERNAL_ERROR);
         }
+    }
+
+    protected boolean badParams(Object... params) {
+        for (var p : params)
+            if (p == null)
+                return true;
+        return false;
     }
 }
