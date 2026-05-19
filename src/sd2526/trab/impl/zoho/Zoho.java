@@ -6,6 +6,7 @@ import com.github.scribejava.core.model.Response;
 import com.github.scribejava.core.model.Verb;
 import com.github.scribejava.core.oauth.OAuth20Service;
 
+import sd2526.trab.api.Message;
 import sd2526.trab.impl.zoho.zohoAPI.ZohoServiceFactory;
 import sd2526.trab.impl.zoho.zohoAPI.ZohoTokenManager;
 import sd2526.trab.impl.zoho.zohoAPI.msgs.*;
@@ -25,6 +26,7 @@ public class Zoho {
 	private static final String ACCOUNTS = "/accounts";
     private static final String MESSAGES = "/messages";
     private static final String FOLDERS = "/folders/";
+    private static final String SEPARATOR = "\n------\n";
 
     final OAuth20Service service;
     final ZohoTokenManager tokenManager;
@@ -62,27 +64,34 @@ public class Zoho {
         }
     }
 
-    public String sendMessage() throws Exception {
-        String accountID = getAccount().accountId();
+    public String sendMessage(String messageId, String sender, String destination, long creationTime, String content) throws Exception {
+        ZohoAccount account = getAccount();
+        String accountID = account.accountId();
+        String mailbox = account.mailboxAddress();
+
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
         OAuthRequest request = new OAuthRequest(Verb.POST, MAIL_API_BASE + ACCOUNTS + "/" + accountID + MESSAGES);
         request.addHeader("Content-Type", "application/json; charset=utf-8");
         request.addHeader("Accept", "application/json");
-        var body = JSON.encode(Map.of("fromAddress", "rap.soares@zohomail.eu",
-                "toAddress", "rap.soares@zohomail.eu",
-                "subject", "Test Message",
-                "content", "This is a test message"));
-//        request.addBodyParameter("fromAddress", "rap.soares@zohomail.eu");
-//        request.addBodyParameter("toAddress", "rap.soares@zohomail.eu");
-//        request.addBodyParameter("subject", "Test Message");
-//        request.addBodyParameter("content", "This is a test message");
+
+        String fullContent = content + SEPARATOR
+                + "id=" + messageId + "\n"
+                + "sender=" + sender + "\n"
+                + "destination=" + destination + "\n"
+                + "creationTime=" + creationTime;
+
+        var body = JSON.encode(Map.of("fromAddress", mailbox,
+                "toAddress", mailbox,
+                "subject", messageId,
+                "content", fullContent));
+
         request.setPayload(body);
         service.signRequest(accessToken, request);
 
         try (Response response = service.execute(request)) {
-            if (!response.isSuccessful()) {
+            if (!response.isSuccessful())
                 throw new RuntimeException(response.getCode() + ": " + response.getBody());
-            }
+
             return response.getBody();
         }
     }
@@ -95,14 +104,13 @@ public class Zoho {
         request.addHeader("Accept", "application/json");
         service.signRequest(accessToken, request);
         try (Response response = service.execute(request)) {
-            if (!response.isSuccessful()) {
+            if (!response.isSuccessful())
                 throw new RuntimeException(response.getCode() + ": " + response.getBody());
-            }
+
             var body = response.getBody();
             var data = JSON.decode(body, ZohoMessageReply.class).data();
             if (data == null || data.isEmpty()) return null;
             return data;
-
         }
     }
 
@@ -115,30 +123,27 @@ public class Zoho {
         service.signRequest(accessToken, request);
         System.out.println("passed sign request");
         try (Response response = service.execute(request)) {
-            if (!response.isSuccessful()) {
+            if (!response.isSuccessful())
                 throw new RuntimeException(response.getCode() + ": " + response.getBody());
-            }
+
             var body = response.getBody();
             var data = JSON.decode(body, ZohoMessageReply.class).data();
             System.out.println("passed var data");
             if (data == null || data.isEmpty()) return null;
             for(ZohoMessage message : data){
-                if (message != null && message.subject().contains(messageID)){
+                if (message != null && message.subject().contains(messageID)) {
                     System.out.println(message.subject());
                     return message;
                 }
             }
             return null;
-
         }
     }
 
     public void deleteMessage(String messageId, String folderId) throws Exception {
         String accountID = getAccount().accountId();
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
-        OAuthRequest request = new OAuthRequest(Verb.DELETE, MAIL_API_BASE + ACCOUNTS + "/" + accountID + FOLDERS + "/" + folderId + MESSAGES + "/" + messageId);
-        request.addHeader("Content-Type", "application/json; charset=utf-8");
-        request.addHeader("Accept", "application/json");
+        OAuthRequest request = new OAuthRequest(Verb.DELETE, MAIL_API_BASE + ACCOUNTS + "/" + accountID + FOLDERS + folderId + MESSAGES + "/" + messageId);
         service.signRequest(accessToken, request);
         try (Response response = service.execute(request)) {
             if (!response.isSuccessful())
@@ -146,22 +151,48 @@ public class Zoho {
         }
     }
 
-    /** To allow for testing this service automatically, using the Tester, it is necessary to start with a clean state, i.e.,
-     *  with an empty mailbox. To achieve this, the Tester will pass as the first parameter of this Messages server the value true
-     *  to indicate that the previous state should be ignored.
-    public void deleteAllMessages() throws Exception {
-        var ids = getAllMessages();
-        for (String id : ids)
-            deleteMessage(id);
-    }*/
+    public Message getParsedMessage(String accountId, String folderId, String messageId) throws Exception {
+        String content = getMessageContent(accountId, folderId, messageId);
 
-    /** If the Tester passes the value false, the saved state should be used by the server.
-    public List<ZohoStoredMessage> getAllStoredMessages() throws Exception {
-        var result = new ArrayList<ZohoStoredMessage>();
-        for (String zohoId : getAllMessages()) {
-            var msg = getMessage(zohoId);
-            if (msg != null) result.add(msg);
+        if (content == null)
+            return null;
+
+        int separator = content.lastIndexOf(SEPARATOR);
+
+        return null;
+    }
+
+    /*To allow for testing this service automatically, using the Tester, it is necessary to start with a clean state, i.e.,
+     *  with an empty mailbox. To achieve this, the Tester will pass as the first parameter of this Messages server the value true
+     *  to indicate that the previous state should be ignored.*/
+    public void deleteAllMessages() throws Exception {
+        var msgs = getAllMessages();
+        if (msgs != null)
+            for (ZohoMessage msg : msgs)
+                deleteMessage(msg.messageId(), msg.folderId());
+    }
+
+    //If the Tester passes the value false, the saved state should be used by the server.
+    public List<ZohoMessage> getAllStoredMessages() throws Exception {
+        var msgs = getAllMessages();
+        if (msgs != null)
+            return msgs;
+        else
+            return new ArrayList<>();
+    }
+
+    private String getMessageContent(String accountId, String folderId, String messageId) throws Exception {
+        var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
+        OAuthRequest request = new OAuthRequest(Verb.GET, MAIL_API_BASE + ACCOUNTS + "/" + accountId + FOLDERS + folderId + MESSAGES + "/" + messageId + "/content");
+        request.addHeader("Content-Type", "application/json; charset=utf-8");
+        request.addHeader("Accept", "application/json");
+        service.signRequest(accessToken, request);
+
+        try (Response response = service.execute(request)) {
+            if (!response.isSuccessful())
+                throw new RuntimeException(response.getCode() + ": " + response.getBody());
+            var reply = JSON.decode(response.getBody(), ZohoContentReply.class);
+            return reply.data().content();
         }
-        return result;
-    }*/
+    }
 }
