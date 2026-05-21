@@ -77,7 +77,7 @@ public class JavaMessages extends JavaBaseService implements Messages, AdminMess
 		Log.info( () -> "postMessage : pwd = %s, msg = %s\n".formatted(pwd, msg));
 
 		return getUser(msg.getSender(), pwd)					
-				.thenWith( (user) -> doAsyncPost( user, msg ));			
+				.thenWith( (user) -> doAsyncPost( user, msg ));
 	}
 
 	@Override
@@ -292,6 +292,9 @@ public class JavaMessages extends JavaBaseService implements Messages, AdminMess
 				for (var e : remoteTargets.entrySet()) {
 					var domain = e.getKey();
 					var domainRecipientAddressess = e.getValue();
+                    Log.info("REMOTE TARGET DOMAIN = " + domain);
+                    Log.info("REMOTE RECIPIENTS = " + domainRecipientAddressess);
+                    Log.info("ABOUT TO CALL remotePostMessage ON " + domain);
 					
 					jobs.submit(domain, () -> {
 						var res = super.reTry(() -> Clients.AdminMessagesClient.get(domain).remotePostMessage(msg), REMOTE_COMM_DEADLINE);

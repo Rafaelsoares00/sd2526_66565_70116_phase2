@@ -7,26 +7,27 @@ import com.github.scribejava.core.model.Verb;
 import com.github.scribejava.core.oauth.OAuth20Service;
 
 import sd2526.trab.api.Message;
+import sd2526.trab.api.java.Result;
 import sd2526.trab.impl.zoho.zohoAPI.ZohoServiceFactory;
 import sd2526.trab.impl.zoho.zohoAPI.ZohoTokenManager;
 import sd2526.trab.impl.zoho.zohoAPI.msgs.*;
 import sd2526.trab.impl.utils.JSON;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Zoho {
 	static final String MAIL_API_BASE = "https://mail.zoho.eu/api";
 
 	static final String CLIENT_ID     = "1000.MM3PLMLH0R62S22XVFPZHA712F082W";
     static final String CLIENT_SECRET = "a77bcc254647c23e558ba9dd16e30627f96f9770b6";
-    static final String REFRESH_TOKEN = "1000.e41fe868ec8ac8e8a98ee5cfd3874de1.70b8b915463d91417bbf08dc40062fb0";
+    static final String REFRESH_TOKEN = "1000.da5e1bc8db29b43818e8ed2c448a3532.ddf3a473795e5619d8d1e95820178389";
 
 	private static final String ACCOUNTS = "/accounts";
     private static final String MESSAGES = "/messages";
     private static final String FOLDERS = "/folders/";
-    private static final String SEPARATOR = "\n------\n";
+    private static final String SEPARATOR = "------";
+    private String accountID;
+    private String mailbox;
 
     final OAuth20Service service;
     final ZohoTokenManager tokenManager;
@@ -39,8 +40,9 @@ public class Zoho {
     }
  
     synchronized public static Zoho getInstance() {
-    	if( instance == null )
-    		instance = new Zoho();
+    	if( instance == null ) {
+            instance = new Zoho();
+        }
     	return instance;
     }
 
@@ -55,7 +57,10 @@ public class Zoho {
         		var body = response.getBody();
         		var data = JSON.decode(body, ZohoAccountReply.class).data();
         		if (data == null || data.isEmpty()) return null;
-        		return data.get(0);
+                ZohoAccount account = data.get(0);
+                accountID = account.accountId();
+                mailbox = account.mailboxAddress();
+        		return account;
         	}
         	else {
         		System.err.println( response.getCode() + "/" + response.getBody() );
@@ -64,25 +69,21 @@ public class Zoho {
         }
     }
 
-    public String sendMessage(String messageId, String sender, String destination, long creationTime, String content) throws Exception {
+    public void sendMessage(Message m) throws Exception {
         ZohoAccount account = getAccount();
-        String accountID = account.accountId();
-        String mailbox = account.mailboxAddress();
+         accountID = account.accountId();
+         mailbox = account.mailboxAddress();
 
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
         OAuthRequest request = new OAuthRequest(Verb.POST, MAIL_API_BASE + ACCOUNTS + "/" + accountID + MESSAGES);
         request.addHeader("Content-Type", "application/json; charset=utf-8");
         request.addHeader("Accept", "application/json");
 
-        String fullContent = content + SEPARATOR
-                + "id=" + messageId + "\n"
-                + "sender=" + sender + "\n"
-                + "destination=" + destination + "\n"
-                + "creationTime=" + creationTime;
+        String fullContent = m.getContents() + SEPARATOR + JSON.encode(m);
 
         var body = JSON.encode(Map.of("fromAddress", mailbox,
                 "toAddress", mailbox,
-                "subject", messageId,
+                "subject", m.getSubject(),
                 "content", fullContent));
 
         request.setPayload(body);
@@ -91,8 +92,6 @@ public class Zoho {
         try (Response response = service.execute(request)) {
             if (!response.isSuccessful())
                 throw new RuntimeException(response.getCode() + ": " + response.getBody());
-
-            return response.getBody();
         }
     }
 
@@ -108,52 +107,68 @@ public class Zoho {
 
             var body = response.getBody();
             var data = JSON.decode(body, ZohoMessageReply.class).data();
-            if (data == null || data.isEmpty()) return null;
+            if (data == null || data.isEmpty()) return List.of();
             return data;
         }
     }
 
-    public ZohoMessage getMessage(String messageID) throws Exception {
-        String accountID = getAccount().accountId();
-        var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
-        OAuthRequest request = new OAuthRequest(Verb.GET, MAIL_API_BASE + ACCOUNTS + "/" + accountID + MESSAGES + "/view");
-        request.addHeader("Accept", "application/json");
-        service.signRequest(accessToken, request);
-        try (Response response = service.execute(request)) {
-            if (!response.isSuccessful())
-                throw new RuntimeException(response.getCode() + ": " + response.getBody());
-
-            var body = response.getBody();
-            var data = JSON.decode(body, ZohoMessageReply.class).data();
-            if (data == null || data.isEmpty()) return null;
-            for(ZohoMessage message : data){
-                if (message != null && message.subject().contains(messageID))
-                    return message;
+    public Message getMessage(String messageID) throws Exception {
+        List<ZohoMessage> mails = getAllMessages();
+        for (ZohoMessage message : mails) {
+            Message m = Zoho.getInstance().getParsedMessage(accountID, message.folderId(), message.messageId()); //TODO check if getInstance is needed or not
+            if (m.getId().equals(messageID)) {
+                return m;
             }
-            return null;
         }
+        return null;
     }
 
-    public void deleteMessage(String messageId, String folderId) throws Exception {
+    public void deleteMessage(String messageId) throws Exception {
+        List<ZohoMessage> mails = getAllMessages();
+        Message m;
+        String folderID = null;
+        String zohoID = null;
+        for (ZohoMessage message : mails) {
+             m = Zoho.getInstance().getParsedMessage(accountID, message.folderId(), message.messageId());
+            if (m.getId().equals(messageId)) {
+                folderID = message.folderId();
+                zohoID =  message.messageId();
+                break;
+            }
+        }
+        if (folderID == null) return;
         String accountID = getAccount().accountId();
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
-        OAuthRequest request = new OAuthRequest(Verb.DELETE, MAIL_API_BASE + ACCOUNTS + "/" + accountID + FOLDERS + folderId + MESSAGES + "/" + messageId);
+        OAuthRequest request = new OAuthRequest(Verb.DELETE, MAIL_API_BASE + ACCOUNTS + "/" + accountID + FOLDERS + folderID + MESSAGES + "/" + zohoID +"?expunge=true");
         service.signRequest(accessToken, request);
         try (Response response = service.execute(request)) {
             if (!response.isSuccessful())
                 throw new RuntimeException(response.getCode() + ": " + response.getBody());
         }
     }
+
+
 
     public Message getParsedMessage(String accountId, String folderId, String messageId) throws Exception {
         String content = getMessageContent(accountId, folderId, messageId);
-
         if (content == null)
             return null;
 
-        int separator = content.lastIndexOf(SEPARATOR);
+        content = content
+                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?s)<[^>]*>", "")
+                .replace("&quot;", "\"")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">");
 
-        return null;
+        int separator = content.indexOf(SEPARATOR);
+        if (separator < 0)
+            return null;
+
+        String metadata = content.substring(separator + SEPARATOR.length()).trim();
+
+        return JSON.decode(metadata, Message.class);
     }
 
     /*To allow for testing this service automatically, using the Tester, it is necessary to start with a clean state, i.e.,
@@ -162,9 +177,18 @@ public class Zoho {
     public void deleteAllMessages() throws Exception {
         var msgs = getAllMessages();
         if (msgs != null)
-            for (ZohoMessage msg : msgs)
-                deleteMessage(msg.messageId(), msg.folderId());
+            for (ZohoMessage msg : msgs){
+                String accountID = getAccount().accountId();
+                var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
+                OAuthRequest request = new OAuthRequest(Verb.DELETE, MAIL_API_BASE + ACCOUNTS + "/" + accountID + FOLDERS + msg.folderId() + MESSAGES + "/" + msg.messageId() +"?expunge=true");
+                service.signRequest(accessToken, request);
+                try (Response response = service.execute(request)) {
+                    if (!response.isSuccessful())
+                        throw new RuntimeException(response.getCode() + ": " + response.getBody());
+                }
+            }
     }
+
 
     //If the Tester passes the value false, the saved state should be used by the server.
 //    public List<ZohoMessage> getAllStoredMessages() throws Exception {
@@ -177,7 +201,7 @@ public class Zoho {
 
     private String getMessageContent(String accountId, String folderId, String messageId) throws Exception {
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
-        OAuthRequest request = new OAuthRequest(Verb.GET, MAIL_API_BASE + ACCOUNTS + "/" + accountId + FOLDERS + folderId + MESSAGES + "/" + messageId + "/content");
+        OAuthRequest request = new OAuthRequest(Verb.GET, MAIL_API_BASE + ACCOUNTS + "/" + accountId + FOLDERS + folderId + MESSAGES + "/" + messageId + "/content?includeBlockContent=true");
         request.addHeader("Accept", "application/json");
         service.signRequest(accessToken, request);
 
@@ -185,7 +209,20 @@ public class Zoho {
             if (!response.isSuccessful())
                 throw new RuntimeException(response.getCode() + ": " + response.getBody());
             var reply = JSON.decode(response.getBody(), ZohoContentReply.class);
+            System.out.println("getMessageContent test " + reply + "\n");
             return reply.data().content();
         }
+    }
+
+    public List<String> getMessageQuery(String query) throws Exception {
+        List<ZohoMessage> mails = getAllMessages();
+        if (mails == null || mails.isEmpty()) return List.of();
+        List<String> messages = new ArrayList<>();
+        for (ZohoMessage mail : mails) {
+            Message m = Zoho.getInstance().getParsedMessage(accountID,mail.folderId(),mail.messageId());
+            if(query == null ||m.getSubject().toLowerCase().contains(query.toLowerCase()) || m.getContents().toLowerCase().contains(query.toLowerCase()))
+                messages.add(m.getId());
+        }
+        return messages;
     }
 }
