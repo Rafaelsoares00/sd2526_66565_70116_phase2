@@ -111,7 +111,7 @@ public class JavaMessages extends JavaBaseService implements Messages, AdminMess
 				ON e.mid = m.id 
 				AND e.recipient = '%s'
 				WHERE (upper(m.subject) LIKE '%%%s%%' OR upper(m.contents) LIKE '%%%s%%')
-				""".formatted(name, query.toUpperCase(), query.toUpperCase());
+				""".formatted(name, query.toUpperCase().replace("'","''"), query.toUpperCase().replace("'","''"));
 
 		return getUser(name, pwd )
 				.then( () -> DB.select( sqlExpr, String.class));		
@@ -306,6 +306,7 @@ public class JavaMessages extends JavaBaseService implements Messages, AdminMess
 					
 				}
 			}
+            Log.info("postMessage completed\n");
 			return Result.ok(msg.getId());
 		});
 	}
