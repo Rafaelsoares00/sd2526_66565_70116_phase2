@@ -5,16 +5,13 @@ import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.container.ContainerResponseContext;
 import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
-import sd2526.trab.api.java.Result;
 import sd2526.trab.api.rest.RestMessages;
 import sd2526.trab.impl.java.servers.JavaMessages;
-import sd2526.trab.impl.rest.servers.ReplicatedRestMessagesResource;
 import sd2526.trab.impl.utils.IP;
 import sd2526.trab.impl.utils.JSON;
 import sd2526.trab.impl.utils.SyncPoint;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -58,44 +55,44 @@ public class ReplicationManager {
             }
 
             domainLog.put(IP.domain(), -1L);
-
+            domainLog.putIfAbsent(IP.domain(), -1L);
 
         }
     }
-        private Object apply (Operations op){
-            return switch (op.type()) {
-                case "POST" -> impl.postMessage(op.pwd(), op.msg()).value();
+    private Object apply (Operations op){
+        return switch (op.type()) {
+            case "POST" -> impl.postMessage(op.pwd(), op.msg()).value();
 
-                case "REMOVE" ->{
-                    impl.removeInboxMessage(op.name(), op.mid(), op.pwd());
+            case "REMOVE" ->{
+                impl.removeInboxMessage(op.name(), op.mid(), op.pwd());
+                yield null;
+            }
+            case "DELETE" -> {
+                impl.deleteMessage(op.name(), op.mid(), op.pwd());
+                yield null;
+            }
+            case "REMOTE_POST" -> {
+                long last = domainLog.getOrDefault(op.domain(), -1L);
+                if (op.domainVersion() > 0 && op.domainVersion() <= last) {
                     yield null;
                 }
-                case "DELETE" -> {
-                    impl.deleteMessage(op.name(), op.mid(), op.pwd());
-                    yield null;
-                }
-                case "REMOTE_POST" -> {
-                    long last = domainLog.get(op.domain());
-                    if(op.domainVersion() <= last){
-                        yield null;
-                    }
-                    domainLog.put(op.domain(), op.domainVersion());
-                    impl.remotePostMessage(op.msg());
-                    yield null;
-                }
-                case "REMOTE_DELETE" -> {
-                    impl.remoteDeleteMessage(op.mid());
-                    yield null;
-                }
-                case "REMOTE_DELETE_INBOX" -> {
-                    impl.remoteDeleteUserInbox(op.name());
-                    yield null;
-                }
+                domainLog.put(op.domain(), op.domainVersion());
+                impl.remotePostMessage(op.msg());
+                yield null;
+            }
+            case "REMOTE_DELETE" -> {
+                impl.remoteDeleteMessage(op.mid());
+                yield null;
+            }
+            case "REMOTE_DELETE_INBOX" -> {
+                impl.remoteDeleteUserInbox(op.name());
+                yield null;
+            }
 
 
-                default -> throw new RuntimeException();
-            };
-        }
+            default -> throw new RuntimeException();
+        };
+    }
 
     public void syncRead() {
         Long clientVersion = VersionHeaderHandler.version.get();
