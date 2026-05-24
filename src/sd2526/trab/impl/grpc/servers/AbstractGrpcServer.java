@@ -36,24 +36,23 @@ public abstract class AbstractGrpcServer extends AbstractServer {
 
 	protected AbstractGrpcServer(Logger log, String service, int port) throws KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException, SSLException {
 		super(log, service, String.format(SERVER_BASE_URI, IP.hostname(), port, GRPC_CTX));
+
         String keyStoreFilename = System.getProperty("javax.net.ssl.keyStore");
         String keyStorePassword = System.getProperty("javax.net.ssl.keyStorePassword");
+
         KeyStore keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+
         try(FileInputStream input = new FileInputStream(keyStoreFilename)) {
             keystore.load(input, keyStorePassword.toCharArray());
         } catch (CertificateException | NoSuchAlgorithmException | IOException e) {
             throw new RuntimeException(e);
         }
-        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
-                KeyManagerFactory.getDefaultAlgorithm());
+
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
         keyManagerFactory.init(keystore, keyStorePassword.toCharArray());
+        SslContext context = GrpcSslContexts.configure(SslContextBuilder.forServer(keyManagerFactory)).build();
 
-        SslContext context = GrpcSslContexts.configure(
-                SslContextBuilder.forServer(keyManagerFactory)
-        ).build();
-
-        var builder = NettyServerBuilder.forPort(port)
-                .sslContext(context);
+        var builder = NettyServerBuilder.forPort(port).sslContext(context);
 
         for (var controller : controllers(super.serverURI)) {
             builder.addService(controller);
