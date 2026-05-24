@@ -40,7 +40,7 @@ public class Zoho {
     }
  
     synchronized public static Zoho getInstance() {
-    	if( instance == null ) {
+    	if (instance == null) {
             instance = new Zoho();
         }
     	return instance;
@@ -71,8 +71,8 @@ public class Zoho {
 
     public void sendMessage(Message m) throws Exception {
         ZohoAccount account = getAccount();
-         accountID = account.accountId();
-         mailbox = account.mailboxAddress();
+        accountID = account.accountId();
+        mailbox = account.mailboxAddress();
 
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
         OAuthRequest request = new OAuthRequest(Verb.POST, MAIL_API_BASE + ACCOUNTS + "/" + accountID + MESSAGES);
@@ -116,11 +116,22 @@ public class Zoho {
         List<ZohoMessage> mails = getAllMessages();
         for (ZohoMessage message : mails) {
             Message m = Zoho.getInstance().getParsedMessage(accountID, message.folderId(), message.messageId()); //TODO check if getInstance is needed or not
-            if (m.getId().equals(messageID)) {
+            if (m.getId().equals(messageID))
                 return m;
-            }
         }
         return null;
+    }
+
+    public List<String> getMessageQuery(String query) throws Exception {
+        List<ZohoMessage> mails = getAllMessages();
+        if (mails == null || mails.isEmpty()) return List.of();
+        List<String> messages = new ArrayList<>();
+        for (ZohoMessage mail : mails) {
+            Message m = Zoho.getInstance().getParsedMessage(accountID,mail.folderId(),mail.messageId());
+            if(query == null ||m.getSubject().toLowerCase().contains(query.toLowerCase()) || m.getContents().toLowerCase().contains(query.toLowerCase()))
+                messages.add(m.getId());
+        }
+        return messages;
     }
 
     public void deleteMessage(String messageId) throws Exception {
@@ -147,7 +158,23 @@ public class Zoho {
         }
     }
 
-
+    /*To allow for testing this service automatically, using the Tester, it is necessary to start with a clean state, i.e.,
+     *  with an empty mailbox. To achieve this, the Tester will pass as the first parameter of this Messages server the value true
+     *  to indicate that the previous state should be ignored.*/
+    public void deleteAllMessages() throws Exception {
+        var msgs = getAllMessages();
+        if (msgs != null)
+            for (ZohoMessage msg : msgs){
+                String accountID = getAccount().accountId();
+                var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
+                OAuthRequest request = new OAuthRequest(Verb.DELETE, MAIL_API_BASE + ACCOUNTS + "/" + accountID + FOLDERS + msg.folderId() + MESSAGES + "/" + msg.messageId() +"?expunge=true");
+                service.signRequest(accessToken, request);
+                try (Response response = service.execute(request)) {
+                    if (!response.isSuccessful())
+                        throw new RuntimeException(response.getCode() + ": " + response.getBody());
+                }
+            }
+    }
 
     public Message getParsedMessage(String accountId, String folderId, String messageId) throws Exception {
         String content = getMessageContent(accountId, folderId, messageId);
@@ -171,34 +198,6 @@ public class Zoho {
         return JSON.decode(metadata, Message.class);
     }
 
-    /*To allow for testing this service automatically, using the Tester, it is necessary to start with a clean state, i.e.,
-     *  with an empty mailbox. To achieve this, the Tester will pass as the first parameter of this Messages server the value true
-     *  to indicate that the previous state should be ignored.*/
-    public void deleteAllMessages() throws Exception {
-        var msgs = getAllMessages();
-        if (msgs != null)
-            for (ZohoMessage msg : msgs){
-                String accountID = getAccount().accountId();
-                var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
-                OAuthRequest request = new OAuthRequest(Verb.DELETE, MAIL_API_BASE + ACCOUNTS + "/" + accountID + FOLDERS + msg.folderId() + MESSAGES + "/" + msg.messageId() +"?expunge=true");
-                service.signRequest(accessToken, request);
-                try (Response response = service.execute(request)) {
-                    if (!response.isSuccessful())
-                        throw new RuntimeException(response.getCode() + ": " + response.getBody());
-                }
-            }
-    }
-
-
-    //If the Tester passes the value false, the saved state should be used by the server.
-//    public List<ZohoMessage> getAllStoredMessages() throws Exception {
-//        var msgs = getAllMessages();
-//        if (msgs != null)
-//            return msgs;
-//        else
-//            return new ArrayList<>();
-//    } i actually dont think this is needed
-
     private String getMessageContent(String accountId, String folderId, String messageId) throws Exception {
         var accessToken = new OAuth2AccessToken(tokenManager.getValidAccessToken());
         OAuthRequest request = new OAuthRequest(Verb.GET, MAIL_API_BASE + ACCOUNTS + "/" + accountId + FOLDERS + folderId + MESSAGES + "/" + messageId + "/content?includeBlockContent=true");
@@ -212,17 +211,5 @@ public class Zoho {
             System.out.println("getMessageContent test " + reply + "\n");
             return reply.data().content();
         }
-    }
-
-    public List<String> getMessageQuery(String query) throws Exception {
-        List<ZohoMessage> mails = getAllMessages();
-        if (mails == null || mails.isEmpty()) return List.of();
-        List<String> messages = new ArrayList<>();
-        for (ZohoMessage mail : mails) {
-            Message m = Zoho.getInstance().getParsedMessage(accountID,mail.folderId(),mail.messageId());
-            if(query == null ||m.getSubject().toLowerCase().contains(query.toLowerCase()) || m.getContents().toLowerCase().contains(query.toLowerCase()))
-                messages.add(m.getId());
-        }
-        return messages;
     }
 }

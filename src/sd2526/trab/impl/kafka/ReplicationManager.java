@@ -18,7 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 public class ReplicationManager {
-    private static Logger log = Logger.getLogger(ReplicationManager.class.getName());
     private static KafkaPublisher kafkaPublisher;
     private static KafkaSubscriber sub;
     private static final String ADDRESSES = "kafka:9092,localhost:9092";
@@ -30,23 +29,13 @@ public class ReplicationManager {
     public ReplicationManager() {
         KafkaUtils.createTopic(topic);
 
-
         synchronized (ReplicationManager.class) {
-
-
-            System.out.println("[KAFKA-START] domain=" + IP.domain()
-                    + " topic=" + topic
-                    + " replica=" + IP.hostAddress());
-
-            if (kafkaPublisher == null) {
+            if (kafkaPublisher == null)
                 kafkaPublisher = KafkaPublisher.createPublisher(ADDRESSES);
-            }
+
             if (sub == null) {
                 sub = KafkaSubscriber.createSubscriber(ADDRESSES, List.of(topic));
                 sub.start(record -> {
-                    System.out.println("[KAFKA-CONSUME] topic=" + record.topic()
-                            + " offset=" + record.offset()
-                            + " value=" + record.value());
                     var op = JSON.decode(record.value(), Operations.class);
                     var result = apply(op);
                     SyncPoint.getSyncPoint().setResult(record.offset(), JSON.encode(result));
@@ -54,49 +43,45 @@ public class ReplicationManager {
                 });
             }
 
-            domainLog.put(IP.domain(), -1L);
             domainLog.putIfAbsent(IP.domain(), -1L);
-
         }
     }
     private Object apply (Operations op){
         return switch (op.type()) {
-            case "POST" ->{
+            case "POST" -> {
                 if (impl.hasMessage(op.msg().getId()))
                     yield op.msg().getId();
                 yield impl.postMessage(op.pwd(), op.msg()).value();
             }
 
-            case "REMOVE" ->{
+            case "REMOVE" -> {
                 impl.removeInboxMessage(op.name(), op.mid(), op.pwd());
                 yield null;
             }
+
             case "DELETE" -> {
                 impl.deleteMessage(op.name(), op.mid(), op.pwd());
                 yield null;
+
             }
             case "REMOTE_POST" -> {
-//                long last = domainLog.getOrDefault(op.domain(), -1L);
-//                if (op.domainVersion() > 0 && op.domainVersion() <= last) {
-//                    yield null;
-//                }
                 domainLog.put(op.domain(), op.domainVersion());
-                if(impl.hasMessage(op.msg().getId())) {
+                if (impl.hasMessage(op.msg().getId()))
                     yield null;
-                }
+
                 impl.applyRemotePost(op.msg());
                 yield null;
             }
+
             case "REMOTE_DELETE" -> {
                 impl.remoteDeleteMessage(op.mid());
                 yield null;
             }
+
             case "REMOTE_DELETE_INBOX" -> {
                 impl.remoteDeleteUserInbox(op.name());
                 yield null;
             }
-
-
             default -> throw new RuntimeException();
         };
     }

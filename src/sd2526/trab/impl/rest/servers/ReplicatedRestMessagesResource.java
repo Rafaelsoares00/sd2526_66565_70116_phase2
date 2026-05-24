@@ -13,7 +13,6 @@ import java.util.logging.Logger;
 
 
 public class ReplicatedRestMessagesResource extends RestResource implements RestMessages, RestAdminMessages {
-    private static Logger log = Logger.getLogger(ReplicatedRestMessagesResource.class.getName());
     private static final JavaMessages impl = JavaMessages.getInstance();
     private ReplicationManager replicationManager;
 
@@ -36,13 +35,15 @@ public class ReplicatedRestMessagesResource extends RestResource implements Rest
     @Override
     public List<String> getMessages(String name, String pwd, String query) {
         replicationManager.syncRead();
-        if (query == null || query.isEmpty()) return impl.getAllInboxMessages(name, pwd).value();
-        else return impl.searchInbox(name, pwd, query).value();
+        if (query == null || query.isEmpty())
+            return impl.getAllInboxMessages(name, pwd).value();
+        else
+            return impl.searchInbox(name, pwd, query).value();
     }
 
     @Override
     public void removeFromUserInbox(String name, String mid, String pwd) {
-            replicationManager.submit(new Operations("REMOVE",null, pwd, null, name, mid, null, -1), Void.class);
+        replicationManager.submit(new Operations("REMOVE",null, pwd, null, name, mid, null, -1), Void.class);
     }
 
     @Override

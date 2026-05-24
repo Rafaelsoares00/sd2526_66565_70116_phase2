@@ -1,4 +1,4 @@
-package sd2526.trab.impl.zoho.servers;
+package sd2526.trab.impl.rest.servers;
 
 import java.net.URI;
 import java.util.logging.Logger;
@@ -24,6 +24,7 @@ public class ZohoMessagesServer {
 
     public static void main(String[] args) throws Exception {
         boolean freshStart = Boolean.parseBoolean(args[0]);
+
         Log.info(String.valueOf(freshStart));
 
         if (freshStart)
