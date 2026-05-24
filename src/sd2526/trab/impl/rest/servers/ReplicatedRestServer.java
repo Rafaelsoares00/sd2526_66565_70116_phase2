@@ -18,8 +18,7 @@ public class ReplicatedRestServer extends AbstractRestServer {
 
     @Override
     void registerResources(ResourceConfig config) {
-        var resource = new ReplicatedRestMessagesResource();
-        config.register(resource);
+        config.register(new ReplicatedRestMessagesResource());
         config.register(new ReplicationManager.VersionHeaderHandler());
     }
 

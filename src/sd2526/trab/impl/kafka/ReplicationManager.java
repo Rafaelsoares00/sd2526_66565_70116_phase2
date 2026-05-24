@@ -61,7 +61,11 @@ public class ReplicationManager {
     }
     private Object apply (Operations op){
         return switch (op.type()) {
-            case "POST" -> impl.postMessage(op.pwd(), op.msg()).value();
+            case "POST" ->{
+                if (impl.hasMessage(op.msg().getId()))
+                    yield op.msg().getId();
+                yield impl.postMessage(op.pwd(), op.msg()).value();
+            }
 
             case "REMOVE" ->{
                 impl.removeInboxMessage(op.name(), op.mid(), op.pwd());
@@ -72,12 +76,15 @@ public class ReplicationManager {
                 yield null;
             }
             case "REMOTE_POST" -> {
-                long last = domainLog.getOrDefault(op.domain(), -1L);
-                if (op.domainVersion() > 0 && op.domainVersion() <= last) {
+//                long last = domainLog.getOrDefault(op.domain(), -1L);
+//                if (op.domainVersion() > 0 && op.domainVersion() <= last) {
+//                    yield null;
+//                }
+                domainLog.put(op.domain(), op.domainVersion());
+                if(impl.hasMessage(op.msg().getId())) {
                     yield null;
                 }
-                domainLog.put(op.domain(), op.domainVersion());
-                impl.remotePostMessage(op.msg());
+                impl.applyRemotePost(op.msg());
                 yield null;
             }
             case "REMOTE_DELETE" -> {

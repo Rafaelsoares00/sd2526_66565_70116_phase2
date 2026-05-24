@@ -1,12 +1,14 @@
 package sd2526.trab.impl.rest.servers;
 
 import sd2526.trab.api.Message;
+import sd2526.trab.api.User;
 import sd2526.trab.api.rest.RestMessages;
 import sd2526.trab.impl.api.rest.RestAdminMessages;
 import sd2526.trab.impl.java.servers.JavaMessages;
 import sd2526.trab.impl.kafka.*;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 
@@ -21,7 +23,8 @@ public class ReplicatedRestMessagesResource extends RestResource implements Rest
 
     @Override
     public String postMessage(String pwd, Message msg) {
-        return replicationManager.submit(new Operations("POST", pwd, msg, null, null, null, -1),String.class);
+        User u = impl.checkPost(pwd, msg).value();
+        return replicationManager.submit(new Operations("POST", u, pwd, msg, null, null, null, -1),String.class);
     }
 
     @Override
@@ -39,28 +42,28 @@ public class ReplicatedRestMessagesResource extends RestResource implements Rest
 
     @Override
     public void removeFromUserInbox(String name, String mid, String pwd) {
-            replicationManager.submit(new Operations("REMOVE", pwd, null, name, mid, null, -1), Void.class);
+            replicationManager.submit(new Operations("REMOVE",null, pwd, null, name, mid, null, -1), Void.class);
     }
 
     @Override
     public void deleteMessage(String name, String mid, String pwd) {
-        replicationManager.submit(new Operations("DELETE", pwd, null, name, mid, null, -1), Void.class);
+        replicationManager.submit(new Operations("DELETE", null, pwd, null, name, mid, null, -1), Void.class);
     }
 
     @Override
     public void remotePostMessage(Message m) {
         String senderDomain = m.senderAddress().split("@")[1];
         long domainVersion = ReplicationManager.currentVersion;
-        replicationManager.submit(new Operations("REMOTE_POST", null, m, null, null, senderDomain, domainVersion), Void.class);
+        replicationManager.submit(new Operations("REMOTE_POST", null, null, m, null, null,senderDomain, domainVersion), Void.class);
     }
 
     @Override
     public void remoteDeleteMessage(String mid) {
-        replicationManager.submit(new Operations("REMOTE_DELETE", null, null, null, mid, null, -1), Void.class);
+        replicationManager.submit(new Operations("REMOTE_DELETE", null,null, null, null, mid, null, -1), Void.class);
     }
 
     @Override
     public void remoteDeleteUserInbox(String name) {
-        replicationManager.submit(new Operations("REMOTE_DELETE_INBOX", null, null, name, null, null, -1), Void.class);
+        replicationManager.submit(new Operations("REMOTE_DELETE_INBOX", null, null, null, name, null, null, -1), Void.class);
     }
 }

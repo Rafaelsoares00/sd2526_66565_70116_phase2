@@ -7,10 +7,7 @@ import static sd2526.trab.api.java.Result.ErrorCode.FORBIDDEN;
 import static sd2526.trab.api.java.Result.ErrorCode.INTERNAL_ERROR;
 
 import java.time.Duration;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -80,6 +77,22 @@ public class JavaMessages extends JavaBaseService implements Messages, AdminMess
 				.thenWith( (user) -> doAsyncPost( user, msg ));
 	}
 
+    public Result<User> checkPost(String pwd,  Message msg) {
+        if(badParams(pwd, msg)) return error(BAD_REQUEST);
+        User u = getUser(msg.getSender(), pwd).value();
+        if (u == null) return error(FORBIDDEN);
+        return ok(u);
+    }
+
+    public Result<Void> applyRemotePost(Message msg) {
+        var localAdresses = getLocalRecipientAddresses(msg);
+        if (!localAdresses.isEmpty()) {
+            deliverToKnownLocalRecipients(localAdresses, msg);
+        }
+        return Result.ok();
+    }
+
+
 	@Override
 	public Result<Message> getInboxMessage(String name, String mid, String pwd) {
 		Log.info( () -> "getInboxMessage : name = %s, mid = %s, pwd = %s\n".formatted(name, mid, pwd));
@@ -138,7 +151,8 @@ public class JavaMessages extends JavaBaseService implements Messages, AdminMess
 			.thenWith(msg -> name.equals( getName(msg.senderAddress())) ? ok(msg) : error(FORBIDDEN) )
 			.thenWith((msg) -> doAsyncDelete(msg));
 	}
-	
+
+
 	
 	protected Result<User> getUser( String user, String pwd) {
 		try {
@@ -266,7 +280,7 @@ public class JavaMessages extends JavaBaseService implements Messages, AdminMess
 
 		return getCachedMessage(msg.originId()).mapValue(Message::getId).orElse(() -> {
 			
-			
+
 			msg.setId("%s+%04d".formatted(THIS_DOMAIN, counter.incrementAndGet()));
 			
 			messagesCache.put(msg.originId(), new Message( msg )); // For ensuring idempotency...
@@ -367,5 +381,11 @@ public class JavaMessages extends JavaBaseService implements Messages, AdminMess
 				instance = new JavaMessages();
 			return instance;
 		}
+
+        public boolean hasMessage (String mid){
+            if (mid == null) return false;
+            var msg = DB.getOne(mid, Message.class);
+            return msg.isOK() && msg.value() != null;
+        }
 	}
 
